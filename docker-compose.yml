@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - '2181:2181'
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.1
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    ports:
+      - '9092:9092'
+    depends_on:
+      - zookeeper
+
+  cashflow:
+    build:
+      context: ./services/cashflow
+    ports:
+      - '8001:8001'
+    environment:
+      - API_KEY=dev-key
+      - DATA_FILE=/data/warehouse/market_prices.csv
+    volumes:
+      - ./data/warehouse:/data/warehouse
+    depends_on:
+      - kafka
+
+  ingest-producer:
+    build:
+      context: ./platform/data-ingest
+    command: ["python", "/app/producer.py"]
+    environment:
+      - BROKER=kafka:9092
+      - TOPIC=market.prices
+    depends_on:
+      - kafka
+
+  ingest-consumer:
+    build:
+      context: ./platform/data-ingest
+    environment:
+      - BROKER=kafka:9092
+      - TOPIC=market.prices
+      - OUT_DIR=/data/raw
+    volumes:
+      - ./data/raw:/data/raw
+    depends_on:
+      - kafka
+
+  etl-runner:
+    build:
+      context: ./platform/etl
+    environment:
+      - ETL_INTERVAL=15
+      - ETL_SCRIPT=/app/load_to_duckdb.py
+      - RAW_FILE=/data/raw/market_prices.ndjson
+      - DB_FILE=/data/warehouse/market.duckdb
+    volumes:
+      - ./data/raw:/data/raw
+      - ./data/warehouse:/data/warehouse
+    depends_on:
+      - ingest-consumer
