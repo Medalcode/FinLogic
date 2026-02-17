@@ -79,3 +79,46 @@ curl http://localhost:8001/prices
 # 3. Test de carga
 python -m unittest discover services/cashflow/tests
 ```
+
+---
+
+## Cambios recientes en el repositorio
+
+Hechos durante la mejora hacia un proyecto más profesional y observable:
+
+- Se añadieron documentación operativa en `docs/agent.md` y `docs/skills.md`.
+- Se instrumentó la API con métricas Prometheus y se expuso `/metrics`.
+- Se extrajeron utilidades (`read_prices_csv`, `aggregate_ohlc`) a `services/cashflow/src/utils.py` para mejorar separación de responsabilidades.
+- Ajustes en `services/cashflow/src/main.py` para usar la instrumentación y las utilidades refactorizadas.
+- Tests unitarios actualizados y verificados: `python -m unittest discover -v services/cashflow/tests` → OK.
+
+## Instrucciones rápidas (entorno local)
+
+1. Activar entorno virtual (Windows PowerShell):
+
+```powershell
+& .venv\Scripts\Activate.ps1
+```
+
+2. Instalar dependencias (si no están instaladas):
+
+```powershell
+python -m pip install -r services/cashflow/requirements.txt
+```
+
+3. Ejecutar tests:
+
+```powershell
+python -m unittest discover -v services/cashflow/tests
+```
+
+4. Levantar en dev con Docker Compose:
+
+```powershell
+docker-compose up --build
+```
+
+---
+
+Si quieres, puedo además crear los manifiestos iniciales de Kubernetes en `k8s/` y configurar ejemplos de dashboards de Prometheus/Grafana.
+

@@ -2,12 +2,18 @@ from fastapi import FastAPI, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from cashflow.core import npv, irr
 import os
-import csv
 from typing import List, Dict, Any, Optional
 import statistics
 import math
 
 app = FastAPI(title="Cashflow Service")
+
+# import utilities
+try:
+    from utils import aggregate_ohlc, read_prices_csv
+except Exception:
+    # when imported as package, fallback to package import path
+    from services.cashflow.src.utils import aggregate_ohlc, read_prices_csv
 
 
 def validate_api_key(x_api_key: str = Header(None), authorization: str = Header(None)) -> str:
@@ -50,66 +56,10 @@ def compute_irr(req: IRRRequest, api_key: str = Depends(validate_api_key)):
     return {"irr": result}
 
 
-def read_prices_csv(path: str, symbol: Optional[str] = None, limit: int = 100, offset: Optional[int] = None, from_ts: Optional[int] = None, to_ts: Optional[int] = None) -> List[Dict[str, Any]]:
-    if not os.path.exists(path):
-        return []
-    rows: List[Dict[str, Any]] = []
-    with open(path, 'r') as fh:
-        reader = csv.DictReader(fh)
-        for r in reader:
-            try:
-                if 'price' in r and r['price'] != '':
-                    r['price'] = float(r['price'])
-                if 'ts' in r and r['ts'] != '':
-                    r['ts'] = int(r['ts'])
-            except Exception:
-                pass
-            if symbol and r.get('symbol') != symbol:
-                continue
-            if from_ts is not None and ('ts' not in r or r['ts'] < from_ts):
-                continue
-            if to_ts is not None and ('ts' not in r or r['ts'] > to_ts):
-                continue
-            rows.append(r)
-    # sort ascending by ts
-    rows = sorted(rows, key=lambda x: x.get('ts', 0))
-    # pagination: if offset is None, return last `limit` rows for backward compatibility
-    if offset is None:
-        return rows[-limit:]
-    else:
-        return rows[offset: offset + limit]
+# `read_prices_csv` is implemented in `utils.py` and imported above.
 
 
-def aggregate_ohlc(rows: List[Dict[str, Any]], interval_seconds: int) -> List[Dict[str, Any]]:
-    """Aggregate rows into OHLC buckets sized `interval_seconds`.
-
-    Expects rows with numeric `ts` (unix seconds) and `price`.
-    Returns list of buckets ordered by ascending bucket timestamp.
-    """
-    if not rows:
-        return []
-    # ensure rows sorted by ts ascending
-    sorted_rows = sorted([r for r in rows if 'ts' in r and 'price' in r], key=lambda x: int(x['ts']))
-    buckets = {}
-    order = []
-    for r in sorted_rows:
-        ts = int(r['ts'])
-        price = float(r['price'])
-        bucket = ts - (ts % interval_seconds)
-        if bucket not in buckets:
-            buckets[bucket] = {'open': price, 'high': price, 'low': price, 'close': price, 'count': 1}
-            order.append(bucket)
-        else:
-            b = buckets[bucket]
-            b['high'] = max(b['high'], price)
-            b['low'] = min(b['low'], price)
-            b['close'] = price
-            b['count'] += 1
-    result = []
-    for b in sorted(order):
-        item = buckets[b]
-        result.append({'bucket_ts': b, 'open': item['open'], 'high': item['high'], 'low': item['low'], 'close': item['close'], 'count': item['count']})
-    return result
+# `aggregate_ohlc` is implemented in `utils.py` and imported above.
 
 
 def read_prices_duckdb(path: str, symbol: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
@@ -120,6 +70,32 @@ def read_prices_duckdb(path: str, symbol: Optional[str] = None, limit: int = 100
     """
     try:
         import duckdb
+    except Exception:
+        return []
+    try:
+        # construir consulta con filtros básicos
+        base = 'SELECT * FROM market_prices'
+        clauses = []
+        if symbol:
+            clauses.append(f"symbol = '{symbol}'")
+        # no offset handling here; rely on limit and optional where on ts passed as env in fallback
+        order = f" ORDER BY ts DESC LIMIT {int(limit)}"
+        where = ''
+        if clauses:
+            where = ' WHERE ' + ' AND '.join(clauses)
+        sql = base + where + order
+        con = duckdb.connect(path)
+        df = con.execute(sql).df()
+        con.close()
+        # convertir a lista de dicts y normalizar tipos
+        records = df.to_dict(orient='records')
+        for r in records:
+            if 'price' in r and r['price'] is not None:
+                r['price'] = float(r['price'])
+            if 'ts' in r and r['ts'] is not None:
+                r['ts'] = int(r['ts'])
+        # devolver en orden ascendente por tiempo (más natural)
+        return list(reversed(records))
     except Exception:
         return []
 
@@ -149,32 +125,6 @@ def compute_var_historical(prices: List[float], confidence: float = 0.95) -> flo
     idx = max(0, min(idx, len(returns_sorted) - 1))
     var_value = -returns_sorted[idx]
     return max(0.0, var_value)
-    try:
-        # construir consulta con filtros básicos
-        base = 'SELECT * FROM market_prices'
-        clauses = []
-        if symbol:
-            clauses.append(f"symbol = '{symbol}'")
-        # no offset handling here; rely on limit and optional where on ts passed as env in fallback
-        order = f" ORDER BY ts DESC LIMIT {int(limit)}"
-        where = ''
-        if clauses:
-            where = ' WHERE ' + ' AND '.join(clauses)
-        sql = base + where + order
-        con = duckdb.connect(path)
-        df = con.execute(sql).df()
-        con.close()
-        # convertir a lista de dicts y normalizar tipos
-        records = df.to_dict(orient='records')
-        for r in records:
-            if 'price' in r and r['price'] is not None:
-                r['price'] = float(r['price'])
-            if 'ts' in r and r['ts'] is not None:
-                r['ts'] = int(r['ts'])
-        # devolver en orden ascendente por tiempo (más natural)
-        return list(reversed(records))
-    except Exception:
-        return []
 
 
 @app.get('/prices')
@@ -237,33 +187,6 @@ def get_prices(symbol: Optional[str] = None, limit: int = 100, agg: Optional[str
         rows = read_prices_csv(path, symbol=symbol, limit=limit)
 
     if agg == 'ohlc':
-        def aggregate_ohlc(rows: List[Dict[str, Any]], interval_seconds: int) -> List[Dict[str, Any]]:
-            if not rows:
-                return []
-            # ensure rows sorted by ts
-            sorted_rows = sorted([r for r in rows if 'ts' in r and 'price' in r], key=lambda x: x['ts'])
-            buckets = {}
-            order = []
-            for r in sorted_rows:
-                ts = int(r['ts'])
-                price = float(r['price'])
-                bucket = ts - (ts % interval_seconds)
-                if bucket not in buckets:
-                    buckets[bucket] = { 'open': price, 'high': price, 'low': price, 'close': price, 'count': 1, 'first_ts': ts, 'last_ts': ts }
-                    order.append(bucket)
-                else:
-                    b = buckets[bucket]
-                    b['high'] = max(b['high'], price)
-                    b['low'] = min(b['low'], price)
-                    b['close'] = price
-                    b['count'] += 1
-                    b['last_ts'] = ts
-            result = []
-            for b in sorted(order):
-                item = buckets[b]
-                result.append({ 'bucket_ts': b, 'open': item['open'], 'high': item['high'], 'low': item['low'], 'close': item['close'], 'count': item['count'] })
-            return result
-
         agg_rows = aggregate_ohlc(rows, interval)
         return {"count": len(agg_rows), "rows": agg_rows}
 
@@ -299,3 +222,4 @@ def analytics_summary(symbol: Optional[str] = None, from_ts: Optional[int] = Non
     summary['stdev'] = statistics.pstdev(prices) if len(prices) > 1 else 0.0
     var = compute_var_historical(prices, confidence=confidence)
     return {'count': len(prices), 'summary': summary, 'var': var}
+

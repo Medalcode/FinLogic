@@ -3,7 +3,9 @@ import unittest
 
 # allow importing module from src when running tests from repo root
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from main import aggregate_ohlc
+# Import utils from the test `src` path. Disable import-position lint warning for this test helper import.
+# pylint: disable=wrong-import-position, import-error
+from utils import aggregate_ohlc
 
 
 class TestOHLC(unittest.TestCase):
