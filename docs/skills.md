@@ -3,45 +3,32 @@
 ## Propósito
 Catálogo de skills (roles operativos y técnicos) y playbooks prácticos para ejecutar y mantener FinLogic en producción.
 
-## Roles / Skills
+## Super-Skills (Paramétricas)
 
-- **ETL Operator**
-  - Responsabilidades: ejecutar y supervisar pipelines ETL, comprobar integridad de datos, coordinar backups y migraciones del warehouse.
-  - Herramientas: Python, DuckDB, Cron/Kubernetes CronJob, S3 (backups), Redis (locks opcional).
-  - Playbook corto:
-    1. Ver logs del job ETL: `kubectl logs job/etl-...` o revisar container logs en Compose.
-    2. Forzar re-run: crear `Job` en k8s con la imagen del ETL y comprobar `kubectl logs`.
-    3. Comprobar tabla: usar DuckDB CLI o conectar con `duckdb` para validar filas y deduplicación.
+- **DataLifecycle [Super-Skill]**
+  - **Fusión**: ETL Operator + Data Engineer logic.
+  - **Parámetros**: `operation` (ingest, extract, clean, migrate), `format` (duckdb, csv, ndjson, parquet).
+  - **Herramientas**: Python, DuckDB, SQL, S3, Parquet.
+  - **Uso**: Unifica la carga desde `data/raw`, deduplicación en Warehouse y exportaciones para análisis.
+  
+- **BusinessIntelligence [Super-Skill]**
+  - **Fusión**: API Maintainer (Analytics) + Core Financial.
+  - **Parámetros**: `calc_type` (financial_math, statistical_agg, risk_modeling), `engine` (core_py, duckdb_sql).
+  - **Herramientas**: FastAPI, core.py, statistics, VaR modules.
+  - **Uso**: Centraliza el cálculo de NPV, IRR, retornos históricos y métricas de riesgo desde una única interfaz lógica.
 
-- **API Maintainer (Backend Engineer)**
-  - Responsabilidades: mantener endpoints, asegurar rendimiento, instrumentar métricas y manejar releases.
-  - Herramientas: FastAPI, uvicorn, Prometheus client, Docker, Kubernetes.
-  - Playbook corto:
-    1. Ver salud: `curl http://<service>/health`.
-    2. Revisar errores: `kubectl logs deployment/cashflow`.
-    3. Actualizar dependencias y ejecutar tests: `python -m unittest discover -v`.
+- **SystemReliability [Super-Skill]**
+  - **Fusión**: DevOps / Platform + API Maintainer (Ops).
+  - **Parámetros**: `scope` (infrastructure, observability, security), `action` (deploy, rotate, monitor).
+  - **Herramientas**: Kubectl, Helm, Vault, Prometheus, Grafana.
+  - **Uso**: Automatiza el ciclo CI/CD, despliegue en K8s, rotación de secretos y observabilidad de salud operativa.
 
-- **Data Engineer**
-  - Responsabilidades: modelado y calidad de datos, migraciones de esquema, optimizaciones de consulta para análisis.
-  - Herramientas: DuckDB, SQL, Python, migration snapshots.
-  - Playbook corto:
-    1. Exportar subset para pruebas: `duckdb -c "COPY (SELECT ...) TO 'subset.csv' (HEADER)"`.
-    2. Planificar migración a DB gestionada si se requiere concurrencia/HA.
+## Playbooks operativos (por Super-Skill)
 
-- **DevOps / Platform**
-  - Responsabilidades: CI/CD, despliegue en Kubernetes, provisioning de observabilidad y secretos (Vault).
-  - Herramientas: kubectl, Helm, Vault, Prometheus, Grafana, GitHub Actions.
-  - Playbook corto:
-    1. Ver estado cluster: `kubectl get nodes,pods,svc`.
-    2. Aplicar manifiestos: `kubectl apply -f k8s/`.
-    3. Revisión de alertas en Grafana/Prometheus y ejecutar rollback si es necesario.
-
-## Playbooks operativos (por skill)
-
-- ETL Operator: diagnóstico de fallo ETL
+- DataLifecycle: diagnóstico de fallo en Warehouse
   - Comprobar logs del job
   - Verificar existencia de archivos en `data/raw`
-  - Ejecutar script ETL localmente con `python platform/etl/load_to_duckdb.py --dry-run`
+  - Ejecutar script ETL localmente con `python platform/etl/engine.py --dry-run`
 
 - API Maintainer: alto latency
   - Revisar métricas de latencia en Prometheus/Grafana
@@ -81,7 +68,7 @@ Catálogo de skills (roles operativos y técnicos) y playbooks prácticos para e
 1. Clonar repo y revisar `README.md`.
 2. Correr tests: `python -m unittest discover -v`.
 3. Levantar ambiente local con `docker-compose up --build`.
-4. Revisión rápida de `services/cashflow/src/main.py` y `platform/etl/load_to_duckdb.py`.
+4. Revisión rápida de `services/cashflow/src/main.py` y `platform/etl/engine.py`.
 
 ## Contactos y propiedad
 - Mantener en el README del equipo la lista de propietarios por componente (ETL / API / Platform).

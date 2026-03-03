@@ -2,13 +2,14 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-COPY load_to_csv.py /app/load_to_csv.py
-COPY load_to_duckdb.py /app/load_to_duckdb.py
-COPY etl_runner.py /app/etl_runner.py
+# Copiar el motor consolidado y las dependencias
+COPY engine.py /app/engine.py
+COPY requirements.txt /app/requirements.txt
 
 RUN python -m pip install --no-cache-dir --upgrade pip
-RUN python -m pip install --no-cache-dir duckdb pandas
+RUN python -m pip install --no-cache-dir -r /app/requirements.txt
 
 VOLUME ["/data"]
 
-CMD ["python", "/app/etl_runner.py"]
+# El motor detectará el modo (CSV/DuckDB) vía env-vars en docker-compose.yml
+CMD ["python", "/app/engine.py"]

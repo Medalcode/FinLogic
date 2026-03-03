@@ -1,24 +1,20 @@
 from fastapi import FastAPI, Depends, Header, HTTPException, status
 from pydantic import BaseModel
-from cashflow.core import npv, irr
 import os
 from typing import List, Dict, Any, Optional
 import statistics
 import math
 
-app = FastAPI(title="Cashflow Service")
-
-# import utilities
 try:
-    from utils import aggregate_ohlc, read_prices_csv
-except Exception:
-    # when imported as package, fallback to package import path
-    from services.cashflow.src.utils import aggregate_ohlc, read_prices_csv
+    from utils import aggregate_ohlc, read_prices_csv, npv, irr, read_prices_duckdb, compute_var_historical
+except ImportError:
+    from services.cashflow.src.utils import aggregate_ohlc, read_prices_csv, npv, irr, read_prices_duckdb, compute_var_historical
+
+app = FastAPI(title="Cashflow Service")
 
 
 def validate_api_key(x_api_key: str = Header(None), authorization: str = Header(None)) -> str:
     """Validar API key a través de header `X-API-Key` o `Authorization: Bearer <key>`.
-
     Lee la clave esperada dinámicamente desde la variable de entorno `API_KEY`.
     """
     expected = os.getenv('API_KEY', 'dev-key')
@@ -54,77 +50,6 @@ def compute_npv(req: NPVRequest, api_key: str = Depends(validate_api_key)):
 def compute_irr(req: IRRRequest, api_key: str = Depends(validate_api_key)):
     result = irr(req.cashflows)
     return {"irr": result}
-
-
-# `read_prices_csv` is implemented in `utils.py` and imported above.
-
-
-# `aggregate_ohlc` is implemented in `utils.py` and imported above.
-
-
-def read_prices_duckdb(path: str, symbol: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
-    """Leer últimas `limit` filas desde una DuckDB `path` (tabla `market_prices`).
-
-    Esta función importa `duckdb` y `pandas` en tiempo de ejecución; si el entorno no
-    dispone de estas librerías devuelve lista vacía.
-    """
-    try:
-        import duckdb
-    except Exception:
-        return []
-    try:
-        # construir consulta con filtros básicos
-        base = 'SELECT * FROM market_prices'
-        clauses = []
-        if symbol:
-            clauses.append(f"symbol = '{symbol}'")
-        # no offset handling here; rely on limit and optional where on ts passed as env in fallback
-        order = f" ORDER BY ts DESC LIMIT {int(limit)}"
-        where = ''
-        if clauses:
-            where = ' WHERE ' + ' AND '.join(clauses)
-        sql = base + where + order
-        con = duckdb.connect(path)
-        df = con.execute(sql).df()
-        con.close()
-        # convertir a lista de dicts y normalizar tipos
-        records = df.to_dict(orient='records')
-        for r in records:
-            if 'price' in r and r['price'] is not None:
-                r['price'] = float(r['price'])
-            if 'ts' in r and r['ts'] is not None:
-                r['ts'] = int(r['ts'])
-        # devolver en orden ascendente por tiempo (más natural)
-        return list(reversed(records))
-    except Exception:
-        return []
-
-
-def compute_var_historical(prices: List[float], confidence: float = 0.95) -> float:
-    """Compute historical VaR at `confidence` given a list of prices.
-
-    VaR is returned as a positive fraction representing loss (e.g., 0.02 = 2%).
-    If insufficient data, returns 0.0.
-    """
-    if not prices or len(prices) < 2:
-        return 0.0
-    # compute simple returns (pct change)
-    returns = []
-    for i in range(1, len(prices)):
-        prev = prices[i - 1]
-        cur = prices[i]
-        if prev == 0:
-            continue
-        returns.append((cur - prev) / prev)
-    if not returns:
-        return 0.0
-    returns_sorted = sorted(returns)
-    # loss quantile at (1 - confidence)
-    q = (1.0 - float(confidence))
-    idx = int(math.floor(q * len(returns_sorted)))
-    idx = max(0, min(idx, len(returns_sorted) - 1))
-    var_value = -returns_sorted[idx]
-    return max(0.0, var_value)
 
 
 @app.get('/prices')

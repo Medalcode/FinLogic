@@ -1,5 +1,6 @@
 import os
 import csv
+import math
 from typing import List, Dict, Any, Optional
 
 
@@ -58,3 +59,102 @@ def aggregate_ohlc(rows: List[Dict[str, Any]], interval_seconds: int) -> List[Di
         item = buckets[b]
         result.append({'bucket_ts': b, 'open': item['open'], 'high': item['high'], 'low': item['low'], 'close': item['close'], 'count': item['count']})
     return result
+
+
+def fv(pv: float, rate: float, n: int) -> float:
+    """Valor futuro de un monto `pv` a tasa `rate` durante `n` periodos."""
+    return pv * (1 + rate) ** n
+
+
+def pv(fv_value: float, rate: float, n: int) -> float:
+    """Valor presente de un monto futuro."""
+    return fv_value / (1 + rate) ** n
+
+
+def npv(rate: float, cashflows: List[float]) -> float:
+    """Valor actual neto de una serie de `cashflows` con tasa `rate`.
+    Se asume `cashflows[0]` en t=0.
+    """
+    return sum(cf / (1 + rate) ** i for i, cf in enumerate(cashflows))
+
+
+def irr(cashflows: List[float], tol: float = 1e-6, max_iter: int = 200) -> float:
+    """Tasa interna de retorno por bisección."""
+    def f(r: float) -> float:
+        return npv(r, cashflows)
+
+    low = -0.999999
+    high = 10.0
+    fl = f(low)
+    fh = f(high)
+
+    if fl * fh > 0:
+        for _ in range(60):
+            high *= 2
+            fh = f(high)
+            if fl * fh <= 0:
+                break
+        else:
+            raise ValueError("No se encontró cambio de signo para calcular IRR")
+
+    for _ in range(max_iter):
+        mid = (low + high) / 2
+        fm = f(mid)
+        if abs(fm) < tol:
+            return mid
+        if fl * fm < 0:
+            high = mid
+            fh = fm
+        else:
+            low = mid
+            fl = fm
+    return (low + high) / 2
+
+
+def read_prices_duckdb(path: str, symbol: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+    """Leer últimas `limit` filas desde una DuckDB `path` (tabla `market_prices`)."""
+    try:
+        import duckdb
+    except Exception:
+        return []
+    try:
+        base = 'SELECT * FROM market_prices'
+        clauses = []
+        if symbol:
+            clauses.append(f"symbol = '{symbol}'")
+        order = f" ORDER BY ts DESC LIMIT {int(limit)}"
+        where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
+        sql = base + where + order
+        con = duckdb.connect(path)
+        df = con.execute(sql).df()
+        con.close()
+        records = df.to_dict(orient='records')
+        for r in records:
+            if 'price' in r and r['price'] is not None:
+                r['price'] = float(r['price'])
+            if 'ts' in r and r['ts'] is not None:
+                r['ts'] = int(r['ts'])
+        return list(reversed(records))
+    except Exception:
+        return []
+
+
+def compute_var_historical(prices: List[float], confidence: float = 0.95) -> float:
+    """Compute historical VaR at `confidence` given a list of prices.
+    VaR is returned as a positive fraction (e.g., 0.02 = 2%).
+    """
+    if not prices or len(prices) < 2:
+        return 0.0
+    returns = []
+    for i in range(1, len(prices)):
+        prev = prices[i - 1]
+        cur = prices[i]
+        if prev == 0: continue
+        returns.append((cur - prev) / prev)
+    if not returns: return 0.0
+    returns_sorted = sorted(returns)
+    q = (1.0 - float(confidence))
+    idx = int(math.floor(q * len(returns_sorted)))
+    idx = max(0, min(idx, len(returns_sorted) - 1))
+    var_value = -returns_sorted[idx]
+    return max(0.0, var_value)
