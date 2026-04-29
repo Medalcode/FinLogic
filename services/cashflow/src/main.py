@@ -1,14 +1,29 @@
-from fastapi import FastAPI, Depends, Header, HTTPException, status
-from pydantic import BaseModel
 import os
-from typing import List, Dict, Any, Optional
-import statistics
-import math
+
+from fastapi import Depends, FastAPI, Header, HTTPException, status
+from pydantic import BaseModel
 
 try:
-    from utils import aggregate_ohlc, read_prices_csv, npv, irr, read_prices_duckdb, compute_var_historical, resolve_data_path, load_market_rows, summarize_prices
+    from utils import (
+        aggregate_ohlc,
+        compute_var_historical,
+        irr,
+        load_market_rows,
+        npv,
+        read_prices_csv,
+        read_prices_duckdb,
+        resolve_data_path,
+        summarize_prices,
+    )
 except ImportError:
-    from services.cashflow.src.utils import aggregate_ohlc, read_prices_csv, npv, irr, read_prices_duckdb, compute_var_historical, resolve_data_path, load_market_rows, summarize_prices
+    from services.cashflow.src.utils import (
+        aggregate_ohlc,
+        irr,
+        load_market_rows,
+        npv,
+        resolve_data_path,
+        summarize_prices,
+    )
 
 app = FastAPI(title="Cashflow Service")
 
@@ -53,7 +68,7 @@ def compute_irr(req: IRRRequest, api_key: str = Depends(validate_api_key)):
 
 
 @app.get('/prices')
-def get_prices(symbol: Optional[str] = None, limit: int = 100, agg: Optional[str] = None, interval: int = 60, data_file: str = None, offset: Optional[int] = None, from_ts: Optional[int] = None, to_ts: Optional[int] = None, api_key: str = Depends(validate_api_key)):
+def get_prices(symbol: str | None = None, limit: int = 100, agg: str | None = None, interval: int = 60, data_file: str = None, offset: int | None = None, from_ts: int | None = None, to_ts: int | None = None, api_key: str = Depends(validate_api_key)):
     """Devuelve las últimas `limit` observaciones del CSV (filtrado por `symbol` si se indica).
 
     `data_file` puede pasar por query para tests; por defecto usa `DATA_FILE` env var o
@@ -81,7 +96,7 @@ def get_prices(symbol: Optional[str] = None, limit: int = 100, agg: Optional[str
 
 
 @app.get('/analytics/summary')
-def analytics_summary(symbol: Optional[str] = None, from_ts: Optional[int] = None, to_ts: Optional[int] = None, confidence: float = 0.95, data_file: str = None, api_key: str = Depends(validate_api_key)):
+def analytics_summary(symbol: str | None = None, from_ts: int | None = None, to_ts: int | None = None, confidence: float = 0.95, data_file: str = None, api_key: str = Depends(validate_api_key)):
     """Devuelve resumen estadístico y VaR histórico para `symbol` en el rango dado.
 
     Usa DuckDB si `data_file` apunta a `.duckdb`, sino CSV.

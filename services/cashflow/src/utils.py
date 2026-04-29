@@ -1,11 +1,11 @@
-import os
 import csv
 import math
+import os
 import statistics
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 
-def resolve_data_path(data_file: Optional[str]) -> str:
+def resolve_data_path(data_file: str | None) -> str:
     return data_file or os.getenv('DATA_FILE', './data/warehouse/market_prices.csv')
 
 
@@ -14,10 +14,10 @@ def uses_duckdb(path: str) -> bool:
 
 
 def filter_rows(
-    rows: List[Dict[str, Any]],
-    from_ts: Optional[int] = None,
-    to_ts: Optional[int] = None,
-) -> List[Dict[str, Any]]:
+    rows: list[dict[str, Any]],
+    from_ts: int | None = None,
+    to_ts: int | None = None,
+) -> list[dict[str, Any]]:
     if from_ts is not None:
         rows = [r for r in rows if 'ts' in r and r['ts'] >= from_ts]
     if to_ts is not None:
@@ -27,12 +27,12 @@ def filter_rows(
 
 def load_market_rows(
     path: str,
-    symbol: Optional[str] = None,
+    symbol: str | None = None,
     limit: int = 100,
-    offset: Optional[int] = None,
-    from_ts: Optional[int] = None,
-    to_ts: Optional[int] = None,
-) -> List[Dict[str, Any]]:
+    offset: int | None = None,
+    from_ts: int | None = None,
+    to_ts: int | None = None,
+) -> list[dict[str, Any]]:
     if uses_duckdb(path):
         if not path.endswith('.duckdb'):
             raise ValueError(
@@ -55,7 +55,7 @@ def load_market_rows(
     )
 
 
-def summarize_prices(prices: List[float], confidence: float) -> Dict[str, Any]:
+def summarize_prices(prices: list[float], confidence: float) -> dict[str, Any]:
     if not prices:
         return {}
     return {
@@ -68,11 +68,11 @@ def summarize_prices(prices: List[float], confidence: float) -> Dict[str, Any]:
     }
 
 
-def read_prices_csv(path: str, symbol: Optional[str] = None, limit: int = 100, offset: Optional[int] = None, from_ts: Optional[int] = None, to_ts: Optional[int] = None) -> List[Dict[str, Any]]:
+def read_prices_csv(path: str, symbol: str | None = None, limit: int = 100, offset: int | None = None, from_ts: int | None = None, to_ts: int | None = None) -> list[dict[str, Any]]:
     if not os.path.exists(path):
         return []
-    rows: List[Dict[str, Any]] = []
-    with open(path, 'r') as fh:
+    rows: list[dict[str, Any]] = []
+    with open(path) as fh:
         reader = csv.DictReader(fh)
         for r in reader:
             try:
@@ -98,7 +98,7 @@ def read_prices_csv(path: str, symbol: Optional[str] = None, limit: int = 100, o
         return rows[offset: offset + limit]
 
 
-def aggregate_ohlc(rows: List[Dict[str, Any]], interval_seconds: int) -> List[Dict[str, Any]]:
+def aggregate_ohlc(rows: list[dict[str, Any]], interval_seconds: int) -> list[dict[str, Any]]:
     if not rows:
         return []
     # ensure rows sorted by ts ascending
@@ -135,14 +135,14 @@ def pv(fv_value: float, rate: float, n: int) -> float:
     return fv_value / (1 + rate) ** n
 
 
-def npv(rate: float, cashflows: List[float]) -> float:
+def npv(rate: float, cashflows: list[float]) -> float:
     """Valor actual neto de una serie de `cashflows` con tasa `rate`.
     Se asume `cashflows[0]` en t=0.
     """
     return sum(cf / (1 + rate) ** i for i, cf in enumerate(cashflows))
 
 
-def irr(cashflows: List[float], tol: float = 1e-6, max_iter: int = 200) -> float:
+def irr(cashflows: list[float], tol: float = 1e-6, max_iter: int = 200) -> float:
     """Tasa interna de retorno por bisección."""
     def f(r: float) -> float:
         return npv(r, cashflows)
@@ -175,7 +175,7 @@ def irr(cashflows: List[float], tol: float = 1e-6, max_iter: int = 200) -> float
     return (low + high) / 2
 
 
-def read_prices_duckdb(path: str, symbol: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+def read_prices_duckdb(path: str, symbol: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     """Leer últimas `limit` filas desde una DuckDB `path` (tabla `market_prices`)."""
     try:
         import duckdb
@@ -203,7 +203,7 @@ def read_prices_duckdb(path: str, symbol: Optional[str] = None, limit: int = 100
         return []
 
 
-def compute_var_historical(prices: List[float], confidence: float = 0.95) -> float:
+def compute_var_historical(prices: list[float], confidence: float = 0.95) -> float:
     """Compute historical VaR at `confidence` given a list of prices.
     VaR is returned as a positive fraction (e.g., 0.02 = 2%).
     """

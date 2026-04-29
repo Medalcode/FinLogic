@@ -1,12 +1,12 @@
 """ETL Engine: Motor consolidado de ingesta y transformación.
 Fusiona la lógica de CSV, DuckDB y el Runner en una única interfaz paramétrica.
 """
-import os
-import json
 import csv
-import time
 import glob
-from typing import List, Dict, Any, Optional
+import json
+import os
+import time
+from typing import Any
 
 # Configuración vía Variables de Entorno
 RAW_DIR = os.getenv('RAW_DIR', './data/raw')
@@ -17,12 +17,12 @@ TABLE_NAME = os.getenv('TABLE_NAME', 'market_prices')
 ETL_INTERVAL = int(os.getenv('ETL_INTERVAL', '15'))
 ETL_MODE = os.getenv('ETL_MODE', 'duckdb')  # 'csv' o 'duckdb'
 
-def read_ndjson(path: str) -> List[Dict[str, Any]]:
+def read_ndjson(path: str) -> list[dict[str, Any]]:
     """Lee archivos NDJSON desde un path específico."""
     if not os.path.exists(path):
         return []
     rows = []
-    with open(path, 'r') as fh:
+    with open(path) as fh:
         for line in fh:
             line = line.strip()
             if not line:
@@ -33,7 +33,7 @@ def read_ndjson(path: str) -> List[Dict[str, Any]]:
                 continue
     return rows
 
-def write_csv(rows: List[Dict[str, Any]], out_file: str) -> int:
+def write_csv(rows: list[dict[str, Any]], out_file: str) -> int:
     """Escribe filas en un archivo CSV."""
     if not rows:
         return 0
@@ -45,7 +45,7 @@ def write_csv(rows: List[Dict[str, Any]], out_file: str) -> int:
         writer.writerows(rows)
     return len(rows)
 
-def write_duckdb(con, table: str, files: List[str]) -> int:
+def write_duckdb(con, table: str, files: list[str]) -> int:
     """Inserta datos en DuckDB con deduplicación básica."""
     files_str = "', '".join(files)
     con.execute(f"""
@@ -65,12 +65,12 @@ def write_duckdb(con, table: str, files: List[str]) -> int:
 def run_step(mode: str = 'duckdb'):
     """Ejecuta un paso del ciclo ETL basado en el modo solicitado."""
     print(f"[{time.ctime()}] Ejecutando ETL (Modo: {mode})...")
-    
+
     if mode == 'csv':
         rows = read_ndjson(RAW_FILE)
         count = write_csv(rows, OUT_FILE_CSV)
         print(f"CSV Update: {count} filas procesadas.")
-        
+
     elif mode == 'duckdb':
         import duckdb
         files = glob.glob(os.path.join(RAW_DIR, '*.ndjson'))

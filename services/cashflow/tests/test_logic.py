@@ -1,11 +1,21 @@
 import os
 import sys
-import unittest
 import tempfile
+import unittest
 
 # Aseguramos la ruta del src
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from utils import aggregate_ohlc, read_prices_csv, fv, pv, npv, irr, compute_var_historical, load_market_rows
+from utils import (
+    aggregate_ohlc,
+    compute_var_historical,
+    fv,
+    irr,
+    load_market_rows,
+    npv,
+    pv,
+    read_prices_csv,
+)
+
 
 class TestLibrary(unittest.TestCase):
 
@@ -13,11 +23,11 @@ class TestLibrary(unittest.TestCase):
         """Prueba funciones financieras básicas: FV, PV, NPV, IRR."""
         self.assertAlmostEqual(fv(100, 0.1, 2), 121)
         self.assertAlmostEqual(pv(121, 0.1, 2), 100)
-        
+
         cf = [-100, 60, 60]
         val_npv = npv(0.1, cf)
         self.assertAlmostEqual(val_npv, 4.1322314, places=5)
-        
+
         val_irr = irr(cf)
         self.assertAlmostEqual(npv(val_irr, cf), 0.0, places=5)
 
@@ -66,7 +76,7 @@ class TestDataFilters(unittest.TestCase):
         rows = read_prices_csv(self.path, symbol='USD', limit=10, from_ts=120, to_ts=220)
         tss = [r['ts'] for r in rows]
         self.assertEqual(tss, [120, 150, 220])
-        
+
         rows_page = read_prices_csv(self.path, symbol='USD', limit=2, offset=1)
         tss_page = [r['ts'] for r in rows_page]
         self.assertEqual(tss_page, [120, 150])
