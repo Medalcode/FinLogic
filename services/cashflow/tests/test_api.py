@@ -1,12 +1,11 @@
 import os
 import sys
 import unittest
-import tempfile
 from fastapi.testclient import TestClient
 
 # Permitir importar el módulo desde src
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from main import app, validate_api_key
+from main import app
 
 class TestAPI(unittest.TestCase):
     def setUp(self):
@@ -15,6 +14,7 @@ class TestAPI(unittest.TestCase):
 
     def tearDown(self):
         os.environ.pop('API_KEY', None)
+        os.environ.pop('USE_DUCKDB', None)
 
     def test_auth_unauthorized(self):
         resp = self.client.get('/prices')
@@ -44,6 +44,13 @@ class TestAPI(unittest.TestCase):
         resp = self.client.post("/irr", json=payload, headers=headers)
         self.assertEqual(resp.status_code, 200)
         self.assertIn("irr", resp.json())
+
+    def test_prices_returns_400_when_duckdb_forced_with_csv_path(self):
+        os.environ['USE_DUCKDB'] = '1'
+        headers = {'X-API-Key': 'test-key'}
+        resp = self.client.get('/prices?data_file=market_prices.csv', headers=headers)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("must end with '.duckdb'", resp.json().get('detail', ''))
 
 if __name__ == '__main__':
     unittest.main()

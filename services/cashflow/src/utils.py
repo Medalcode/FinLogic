@@ -1,7 +1,71 @@
 import os
 import csv
 import math
+import statistics
 from typing import List, Dict, Any, Optional
+
+
+def resolve_data_path(data_file: Optional[str]) -> str:
+    return data_file or os.getenv('DATA_FILE', './data/warehouse/market_prices.csv')
+
+
+def uses_duckdb(path: str) -> bool:
+    return path.endswith('.duckdb') or os.getenv('USE_DUCKDB') == '1'
+
+
+def filter_rows(
+    rows: List[Dict[str, Any]],
+    from_ts: Optional[int] = None,
+    to_ts: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    if from_ts is not None:
+        rows = [r for r in rows if 'ts' in r and r['ts'] >= from_ts]
+    if to_ts is not None:
+        rows = [r for r in rows if 'ts' in r and r['ts'] <= to_ts]
+    return rows
+
+
+def load_market_rows(
+    path: str,
+    symbol: Optional[str] = None,
+    limit: int = 100,
+    offset: Optional[int] = None,
+    from_ts: Optional[int] = None,
+    to_ts: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    if uses_duckdb(path):
+        if not path.endswith('.duckdb'):
+            raise ValueError(
+                f"Invalid DATA_FILE for DuckDB mode: '{path}'. "
+                "When USE_DUCKDB=1, DATA_FILE must end with '.duckdb'."
+            )
+        rows = read_prices_duckdb(path, symbol=symbol, limit=max(limit, 1000))
+        rows = filter_rows(rows, from_ts=from_ts, to_ts=to_ts)
+        if offset is None:
+            return rows[-limit:]
+        return rows[offset: offset + limit]
+
+    return read_prices_csv(
+        path,
+        symbol=symbol,
+        limit=limit,
+        offset=offset,
+        from_ts=from_ts,
+        to_ts=to_ts,
+    )
+
+
+def summarize_prices(prices: List[float], confidence: float) -> Dict[str, Any]:
+    if not prices:
+        return {}
+    return {
+        'count': len(prices),
+        'min': min(prices),
+        'max': max(prices),
+        'mean': statistics.mean(prices),
+        'stdev': statistics.pstdev(prices) if len(prices) > 1 else 0.0,
+        'var': compute_var_historical(prices, confidence=confidence),
+    }
 
 
 def read_prices_csv(path: str, symbol: Optional[str] = None, limit: int = 100, offset: Optional[int] = None, from_ts: Optional[int] = None, to_ts: Optional[int] = None) -> List[Dict[str, Any]]:

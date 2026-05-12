@@ -85,5 +85,12 @@ Se ha realizado una refactorización profunda para reducir la fragmentación del
 - **Core Analytics**: Movida toda la lógica de `cashflow/core.py` y analíticas de `main.py` hacia `utils.py` para una API más limpia.
 - **Test Lean**: Reducción de 6 archivos de prueba dispersos a 2 archivos temáticos robustos.
 
+### Actualización Técnica (Mayo 2026)
+
+- **Refactor de lectura de mercado**: `services/cashflow/src/main.py` ahora delega carga, filtros y resumen en helpers reutilizables de `services/cashflow/src/utils.py`.
+- **Hardening de modo DuckDB**: si `USE_DUCKDB=1`, `DATA_FILE` debe terminar en `.duckdb`; en caso contrario, la API responde `HTTP 400` con detalle explícito.
+- **Cobertura ampliada**: se agregaron pruebas para ruta DuckDB (`offset`, rango temporal y validación de configuración forzada), además de test de contrato API para error `400`.
+- **Validación final**: suite `services/cashflow/tests` en verde con 13 tests.
+
 ---
 **Contacto**: Solicita próximas tareas a implementar o priorización para que las ejecute.

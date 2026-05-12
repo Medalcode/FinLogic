@@ -2,11 +2,10 @@ import os
 import sys
 import unittest
 import tempfile
-import statistics
 
 # Aseguramos la ruta del src
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from utils import aggregate_ohlc, read_prices_csv, fv, pv, npv, irr, compute_var_historical
+from utils import aggregate_ohlc, read_prices_csv, fv, pv, npv, irr, compute_var_historical, load_market_rows
 
 class TestLibrary(unittest.TestCase):
 
@@ -57,8 +56,10 @@ class TestDataFilters(unittest.TestCase):
         self.tmp.flush()
 
     def tearDown(self):
-        try: os.unlink(self.path)
-        except: pass
+        try:
+            os.unlink(self.path)
+        except OSError:
+            pass
 
     def test_csv_filters(self):
         """Prueba filtros de rango de tiempo y paginación en archivos CSV."""
@@ -69,6 +70,75 @@ class TestDataFilters(unittest.TestCase):
         rows_page = read_prices_csv(self.path, symbol='USD', limit=2, offset=1)
         tss_page = [r['ts'] for r in rows_page]
         self.assertEqual(tss_page, [120, 150])
+
+
+class TestDuckdbHelpers(unittest.TestCase):
+    def setUp(self):
+        fd, self.db_file = tempfile.mkstemp(suffix='.duckdb')
+        os.close(fd)
+        os.unlink(self.db_file)
+        try:
+            import duckdb
+        except ImportError:
+            self.skipTest('duckdb no disponible en el entorno de pruebas')
+
+        con = duckdb.connect(self.db_file)
+        con.execute(
+            """
+            CREATE TABLE market_prices (
+                symbol VARCHAR,
+                price DOUBLE,
+                ts BIGINT,
+                ingest_ts BIGINT,
+                source VARCHAR
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO market_prices VALUES
+            ('USD', 10.0, 100, 100, 't'),
+            ('USD', 12.0, 120, 120, 't'),
+            ('USD', 11.0, 140, 140, 't'),
+            ('EUR', 20.0, 130, 130, 't')
+            """
+        )
+        con.close()
+
+    def tearDown(self):
+        try:
+            os.unlink(self.db_file)
+        except OSError:
+            pass
+
+    def test_load_market_rows_duckdb_filters_by_range(self):
+        rows = load_market_rows(
+            self.db_file,
+            symbol='USD',
+            limit=100,
+            from_ts=110,
+            to_ts=140,
+        )
+        tss = [r['ts'] for r in rows]
+        self.assertEqual(tss, [120, 140])
+
+    def test_load_market_rows_duckdb_applies_offset(self):
+        rows = load_market_rows(self.db_file, symbol='USD', limit=2, offset=1)
+        tss = [r['ts'] for r in rows]
+        self.assertEqual(tss, [120, 140])
+
+    def test_load_market_rows_rejects_non_duckdb_path_when_env_forces_duckdb(self):
+        original_flag = os.environ.get('USE_DUCKDB')
+
+        os.environ['USE_DUCKDB'] = '1'
+        try:
+            with self.assertRaisesRegex(ValueError, "must end with '.duckdb'"):
+                load_market_rows('market_prices.csv', symbol='USD', limit=2, offset=0, from_ts=110)
+        finally:
+            if original_flag is None:
+                os.environ.pop('USE_DUCKDB', None)
+            else:
+                os.environ['USE_DUCKDB'] = original_flag
 
 if __name__ == '__main__':
     unittest.main()
