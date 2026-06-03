@@ -17,12 +17,17 @@ TABLE_NAME = os.getenv('TABLE_NAME', 'market_prices')
 ETL_INTERVAL = int(os.getenv('ETL_INTERVAL', '15'))
 ETL_MODE = os.getenv('ETL_MODE', 'duckdb')  # 'csv' o 'duckdb'
 
-def read_ndjson(path: str) -> list[dict[str, Any]]:
-    """Lee archivos NDJSON desde un path específico."""
+def read_ndjson(path: str) -> List[Dict[str, Any]]:
+    """Lee archivos NDJSON desde un path específico y maneja rechazos (DLQ)."""
     if not os.path.exists(path):
         return []
     rows = []
-    with open(path) as fh:
+    
+    rejected_dir = os.path.join(os.path.dirname(os.path.dirname(path)), 'rejected')
+    os.makedirs(rejected_dir, exist_ok=True)
+    rejected_path = os.path.join(rejected_dir, 'error.ndjson')
+    
+    with open(path, 'r') as fh:
         for line in fh:
             line = line.strip()
             if not line:
@@ -30,6 +35,8 @@ def read_ndjson(path: str) -> list[dict[str, Any]]:
             try:
                 rows.append(json.loads(line))
             except json.JSONDecodeError:
+                with open(rejected_path, 'a') as rfh:
+                    rfh.write(line + '\n')
                 continue
     return rows
 

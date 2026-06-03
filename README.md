@@ -92,5 +92,13 @@ Se ha realizado una refactorización profunda para reducir la fragmentación del
 - **Cobertura ampliada**: se agregaron pruebas para ruta DuckDB (`offset`, rango temporal y validación de configuración forzada), además de test de contrato API para error `400`.
 - **Validación final**: suite `services/cashflow/tests` en verde con 13 tests.
 
+### Actualización Técnica (Junio 2026)
+
+- **Precisión Numérica**: Reemplazo global de `float` por `Decimal` en el Core y la API para garantizar exactitud matemática en las operaciones de VAN e TIR.
+- **Paginación Maximizada**: Pushdown nativo del parámetro `OFFSET` directamente a las consultas de DuckDB (`read_prices_duckdb`), mitigando problemas de memoria con datasets masivos.
+- **Endpoint de Ingesta (Batch-over-HTTP)**: Nuevo endpoint `POST /ingest` protegido y con validación Pydantic que permite inyectar `MarketQuote` y almacenarlo en `data/raw/incoming.ndjson`.
+- **Resiliencia ETL (DLQ)**: El motor `engine.py` ahora implementa una Dead Letter Queue volcando cualquier registro corrupto a `data/rejected/error.ndjson` en lugar de ignorarlo silenciosamente.
+- **Validación final**: Suite de pruebas extendida (`test_api.py`, `test_logic.py`) en verde con 15 tests en 0.3s.
+
 ---
 **Contacto**: Solicita próximas tareas a implementar o priorización para que las ejecute.

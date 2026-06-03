@@ -54,5 +54,20 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("must end with '.duckdb'", resp.json().get('detail', ''))
 
+    def test_ingest_endpoint_success(self):
+        headers = {'X-API-Key': 'test-key'}
+        payload = [{"symbol": "BTC", "price": 50000, "ts": 1600000000}]
+        resp = self.client.post("/ingest", json=payload, headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["status"], "ok")
+        self.assertEqual(resp.json()["ingested"], 1)
+
+    def test_ingest_endpoint_validation(self):
+        headers = {'X-API-Key': 'test-key'}
+        # price must be > 0
+        payload = [{"symbol": "BTC", "price": -10, "ts": 1600000000}]
+        resp = self.client.post("/ingest", json=payload, headers=headers)
+        self.assertEqual(resp.status_code, 422)
+
 if __name__ == '__main__':
     unittest.main()

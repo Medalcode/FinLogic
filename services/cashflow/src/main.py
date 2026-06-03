@@ -1,7 +1,13 @@
-import os
+import math
+from decimal import Decimal
+from pydantic import BaseModel, Field, field_validator
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
-from pydantic import BaseModel
+from fastapi import FastAPI, Depends, Header, HTTPException, status
+import os
+from typing import List, Dict, Any, Optional
+import statistics
+import json
+import time
 
 try:
     from utils import (
@@ -47,12 +53,25 @@ def validate_api_key(x_api_key: str = Header(None), authorization: str = Header(
 
 
 class NPVRequest(BaseModel):
-    cashflows: list[float]
-    rate: float
+    cashflows: list[Decimal]
+    rate: Decimal
 
 
 class IRRRequest(BaseModel):
-    cashflows: list[float]
+    cashflows: list[Decimal]
+
+
+class MarketQuote(BaseModel):
+    symbol: str = Field(..., min_length=1)
+    price: Decimal
+    ts: int
+
+    @field_validator('price')
+    @classmethod
+    def check_price(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError('Price must be greater than 0')
+        return v
 
 
 @app.post("/npv")
@@ -65,6 +84,23 @@ def compute_npv(req: NPVRequest, api_key: str = Depends(validate_api_key)):
 def compute_irr(req: IRRRequest, api_key: str = Depends(validate_api_key)):
     result = irr(req.cashflows)
     return {"irr": result}
+
+
+@app.post("/ingest")
+def ingest_data(quotes: List[MarketQuote], api_key: str = Depends(validate_api_key)):
+    """Ingesta de precios en formato Batch-over-HTTP."""
+    out_dir = os.getenv('RAW_DIR', './data/raw')
+    os.makedirs(out_dir, exist_ok=True)
+    out_file = os.path.join(out_dir, "incoming.ndjson")
+    
+    with open(out_file, 'a') as f:
+        for q in quotes:
+            d = q.model_dump()
+            d['price'] = float(d['price'])  # Serialize to float for json
+            d['received_ts'] = int(time.time())
+            f.write(json.dumps(d) + '\n')
+            
+    return {"status": "ok", "ingested": len(quotes)}
 
 
 @app.get('/prices')

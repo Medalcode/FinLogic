@@ -2,7 +2,8 @@ import csv
 import math
 import os
 import statistics
-from typing import Any
+from decimal import Decimal
+from typing import List, Dict, Any, Optional
 
 
 def resolve_data_path(data_file: str | None) -> str:
@@ -39,11 +40,9 @@ def load_market_rows(
                 f"Invalid DATA_FILE for DuckDB mode: '{path}'. "
                 "When USE_DUCKDB=1, DATA_FILE must end with '.duckdb'."
             )
-        rows = read_prices_duckdb(path, symbol=symbol, limit=max(limit, 1000))
+        rows = read_prices_duckdb(path, symbol=symbol, limit=limit, offset=offset)
         rows = filter_rows(rows, from_ts=from_ts, to_ts=to_ts)
-        if offset is None:
-            return rows[-limit:]
-        return rows[offset: offset + limit]
+        return rows
 
     return read_prices_csv(
         path,
@@ -55,16 +54,18 @@ def load_market_rows(
     )
 
 
-def summarize_prices(prices: list[float], confidence: float) -> dict[str, Any]:
+def summarize_prices(prices: List[Decimal], confidence: float) -> Dict[str, Any]:
     if not prices:
         return {}
+    # Convert to float for statistics and var if needed, or keep Decimal
+    prices_f = [float(p) for p in prices]
     return {
-        'count': len(prices),
-        'min': min(prices),
-        'max': max(prices),
-        'mean': statistics.mean(prices),
-        'stdev': statistics.pstdev(prices) if len(prices) > 1 else 0.0,
-        'var': compute_var_historical(prices, confidence=confidence),
+        'count': len(prices_f),
+        'min': min(prices_f),
+        'max': max(prices_f),
+        'mean': statistics.mean(prices_f),
+        'stdev': statistics.pstdev(prices_f) if len(prices_f) > 1 else 0.0,
+        'var': compute_var_historical(prices_f, confidence=confidence),
     }
 
 
@@ -77,7 +78,7 @@ def read_prices_csv(path: str, symbol: str | None = None, limit: int = 100, offs
         for r in reader:
             try:
                 if 'price' in r and r['price'] != '':
-                    r['price'] = float(r['price'])
+                    r['price'] = Decimal(r['price'])
                 if 'ts' in r and r['ts'] != '':
                     r['ts'] = int(r['ts'])
             except Exception:
@@ -107,7 +108,7 @@ def aggregate_ohlc(rows: list[dict[str, Any]], interval_seconds: int) -> list[di
     order = []
     for r in sorted_rows:
         ts = int(r['ts'])
-        price = float(r['price'])
+        price = Decimal(r['price'])
         bucket = ts - (ts % interval_seconds)
         if bucket not in buckets:
             buckets[bucket] = {'open': price, 'high': price, 'low': price, 'close': price, 'count': 1}
@@ -125,30 +126,30 @@ def aggregate_ohlc(rows: list[dict[str, Any]], interval_seconds: int) -> list[di
     return result
 
 
-def fv(pv: float, rate: float, n: int) -> float:
+def fv(pv: Decimal, rate: Decimal, n: int) -> Decimal:
     """Valor futuro de un monto `pv` a tasa `rate` durante `n` periodos."""
-    return pv * (1 + rate) ** n
+    return pv * (Decimal('1') + rate) ** n
 
 
-def pv(fv_value: float, rate: float, n: int) -> float:
+def pv(fv_value: Decimal, rate: Decimal, n: int) -> Decimal:
     """Valor presente de un monto futuro."""
-    return fv_value / (1 + rate) ** n
+    return fv_value / (Decimal('1') + rate) ** n
 
 
-def npv(rate: float, cashflows: list[float]) -> float:
+def npv(rate: Decimal, cashflows: List[Decimal]) -> Decimal:
     """Valor actual neto de una serie de `cashflows` con tasa `rate`.
     Se asume `cashflows[0]` en t=0.
     """
-    return sum(cf / (1 + rate) ** i for i, cf in enumerate(cashflows))
+    return sum((cf / (Decimal('1') + rate) ** i for i, cf in enumerate(cashflows)), Decimal('0'))
 
 
-def irr(cashflows: list[float], tol: float = 1e-6, max_iter: int = 200) -> float:
+def irr(cashflows: List[Decimal], tol: float = 1e-6, max_iter: int = 200) -> Decimal:
     """Tasa interna de retorno por bisección."""
-    def f(r: float) -> float:
+    def f(r: Decimal) -> Decimal:
         return npv(r, cashflows)
 
-    low = -0.999999
-    high = 10.0
+    low = Decimal('-0.999999')
+    high = Decimal('10.0')
     fl = f(low)
     fh = f(high)
 
@@ -175,7 +176,7 @@ def irr(cashflows: list[float], tol: float = 1e-6, max_iter: int = 200) -> float
     return (low + high) / 2
 
 
-def read_prices_duckdb(path: str, symbol: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+def read_prices_duckdb(path: str, symbol: Optional[str] = None, limit: int = 100, offset: Optional[int] = None) -> List[Dict[str, Any]]:
     """Leer últimas `limit` filas desde una DuckDB `path` (tabla `market_prices`)."""
     try:
         import duckdb
@@ -187,6 +188,8 @@ def read_prices_duckdb(path: str, symbol: str | None = None, limit: int = 100) -
         if symbol:
             clauses.append(f"symbol = '{symbol}'")
         order = f" ORDER BY ts DESC LIMIT {int(limit)}"
+        if offset is not None:
+            order += f" OFFSET {int(offset)}"
         where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
         sql = base + where + order
         con = duckdb.connect(path)
@@ -195,7 +198,7 @@ def read_prices_duckdb(path: str, symbol: str | None = None, limit: int = 100) -
         records = df.to_dict(orient='records')
         for r in records:
             if 'price' in r and r['price'] is not None:
-                r['price'] = float(r['price'])
+                r['price'] = Decimal(str(r['price']))
             if 'ts' in r and r['ts'] is not None:
                 r['ts'] = int(r['ts'])
         return list(reversed(records))

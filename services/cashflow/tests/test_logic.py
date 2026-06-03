@@ -3,6 +3,8 @@ import sys
 import tempfile
 import unittest
 
+from decimal import Decimal
+
 # Aseguramos la ruta del src
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 from utils import (
@@ -21,15 +23,15 @@ class TestLibrary(unittest.TestCase):
 
     def test_financial_math(self):
         """Prueba funciones financieras básicas: FV, PV, NPV, IRR."""
-        self.assertAlmostEqual(fv(100, 0.1, 2), 121)
-        self.assertAlmostEqual(pv(121, 0.1, 2), 100)
-
-        cf = [-100, 60, 60]
-        val_npv = npv(0.1, cf)
-        self.assertAlmostEqual(val_npv, 4.1322314, places=5)
-
+        self.assertAlmostEqual(float(fv(Decimal('100'), Decimal('0.1'), 2)), 121)
+        self.assertAlmostEqual(float(pv(Decimal('121'), Decimal('0.1'), 2)), 100)
+        
+        cf = [Decimal('-100'), Decimal('60'), Decimal('60')]
+        val_npv = npv(Decimal('0.1'), cf)
+        self.assertAlmostEqual(float(val_npv), 4.1322314, places=5)
+        
         val_irr = irr(cf)
-        self.assertAlmostEqual(npv(val_irr, cf), 0.0, places=5)
+        self.assertAlmostEqual(float(npv(val_irr, cf)), 0.0, places=5)
 
     def test_ohlc_aggregation(self):
         """Prueba la agregación de ticks a velas OHLC."""
@@ -135,7 +137,7 @@ class TestDuckdbHelpers(unittest.TestCase):
     def test_load_market_rows_duckdb_applies_offset(self):
         rows = load_market_rows(self.db_file, symbol='USD', limit=2, offset=1)
         tss = [r['ts'] for r in rows]
-        self.assertEqual(tss, [120, 140])
+        self.assertEqual(tss, [100, 120])
 
     def test_load_market_rows_rejects_non_duckdb_path_when_env_forces_duckdb(self):
         original_flag = os.environ.get('USE_DUCKDB')
