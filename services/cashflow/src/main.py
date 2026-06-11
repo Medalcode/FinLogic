@@ -1,6 +1,6 @@
 import math
 from decimal import Decimal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ValidationError
 
 from fastapi import FastAPI, Depends, Header, HTTPException, status
 import os
@@ -87,20 +87,63 @@ def compute_irr(req: IRRRequest, api_key: str = Depends(validate_api_key)):
 
 
 @app.post("/ingest")
-def ingest_data(quotes: List[MarketQuote], api_key: str = Depends(validate_api_key)):
-    """Ingesta de precios en formato Batch-over-HTTP."""
+def ingest_data(quotes: List[Dict[str, Any]], api_key: str = Depends(validate_api_key)):
+    """Motor de Calidad Financiera: Ingesta, validación y segregación de anomalías."""
     out_dir = os.getenv('RAW_DIR', './data/raw')
+    rej_dir = os.path.join(os.path.dirname(out_dir), 'rejected')
     os.makedirs(out_dir, exist_ok=True)
-    out_file = os.path.join(out_dir, "incoming.ndjson")
+    os.makedirs(rej_dir, exist_ok=True)
     
-    with open(out_file, 'a') as f:
+    out_file = os.path.join(out_dir, "incoming.ndjson")
+    err_file = os.path.join(rej_dir, "error.ndjson")
+    
+    valid_count = 0
+    rejected_count = 0
+    anomalies = set()
+    
+    with open(out_file, 'a') as f_out, open(err_file, 'a') as f_err:
         for q in quotes:
-            d = q.model_dump()
-            d['price'] = float(d['price'])  # Serialize to float for json
-            d['received_ts'] = int(time.time())
-            f.write(json.dumps(d) + '\n')
-            
-    return {"status": "ok", "ingested": len(quotes)}
+            try:
+                valid_quote = MarketQuote.model_validate(q)
+                d = valid_quote.model_dump()
+                d['price'] = float(d['price'])  # Serialize to float for json
+                d['received_ts'] = int(time.time())
+                f_out.write(json.dumps(d) + '\n')
+                valid_count += 1
+            except ValidationError as e:
+                rejected_count += 1
+                error_reasons = []
+                for err in e.errors():
+                    if err.get('type') == 'value_error' and 'greater than 0' in err.get('msg', ''):
+                        error_reasons.append('negative_price')
+                    elif err.get('type') == 'missing':
+                        error_reasons.append(f"missing_{err.get('loc')[0]}")
+                    else:
+                        error_reasons.append(err.get('type'))
+                
+                anomalies.update(error_reasons)
+                rej_record = {
+                    "raw_data": q,
+                    "errors": error_reasons,
+                    "rejected_ts": int(time.time())
+                }
+                f_err.write(json.dumps(rej_record) + '\n')
+            except Exception as e:
+                rejected_count += 1
+                anomalies.add("unknown_error")
+                rej_record = {"raw_data": q, "errors": ["unknown_error"], "rejected_ts": int(time.time())}
+                f_err.write(json.dumps(rej_record) + '\n')
+                
+    total = len(quotes)
+    quality_score = (valid_count / total * 100) if total > 0 else 0.0
+    
+    return {
+        "records_received": total,
+        "valid": valid_count,
+        "rejected": rejected_count,
+        "quality_score": round(quality_score, 2),
+        "anomalies": list(anomalies)
+    }
 
 
 @app.get('/prices')

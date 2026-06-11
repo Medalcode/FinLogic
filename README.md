@@ -1,31 +1,36 @@
 # FinLogic
 
-**The Lightweight Financial Data & Analytics Platform.**
+**Plataforma Lean para Análisis y Calidad de Datos Financieros**
 
 ---
 
-FinLogic es una plataforma de ingeniería de datos financieros diseñada para eliminar la fricción entre la ingestión de datos de mercado y el análisis cuantitativo. Permite a los equipos centrarse en modelar y valorar activos sin perder tiempo construyendo tuberías de datos frágiles mediante un enfoque **Lean** y basado en **DuckDB-Native**.
+FinLogic is a Lean Financial Data Quality and Analytics Platform designed to ingest, validate, transform and analyze financial datasets with a focus on data integrity, reproducibility and operational simplicity.
 
 ## 🎯 El Problema
 
-En la mayoría de los proyectos financieros, el 80% del tiempo se pierde en "plomería": conectar APIs, parsear JSONs, luchar con infraestructuras pesadas y limpiar datos sucios. Solo el 20% se dedica a lo que genera valor: **el análisis financiero**.
+Los analistas financieros y equipos Quant consumen datos provenientes de múltiples fuentes, pero gran parte de su tiempo se pierde validando, limpiando y transformando información cruda antes de poder realizar análisis reales. 
 
-FinLogic invierte esta ecuación ofreciendo una arquitectura de caja blanca lista para usar (Ingest → Warehouse → Compute) con cero coste operacional de base de datos.
+FinLogic busca reducir ese esfuerzo mediante una plataforma ligera y tolerante a fallos que permita:
+- Ingestar datos financieros masivos.
+- Validar la calidad en tiempo real y rechazar anomalías (Data Quality Engine).
+- Almacenar información analítica sin costos operacionales (DuckDB-Native).
+- Calcular métricas financieras (VAN, TIR, VaR).
+- Exponer resultados mediante APIs claras.
 
 ## 👥 ¿Para quién es esto?
 
-- **Equipos Quant / Data Scientists**: Que necesitan un backend robusto para sus modelos sin configurar infra compleja.
-- **Fintechs en etapa MVP**: Que requieren persistencia histórica y cálculos básicos (NPV, IRR, VaR) desde el día 1.
-- **Arquitectos de Software**: Buscando un blueprint de referencia para sistemas financieros modernos de alta eficiencia.
+- **Equipos Quant / Data Scientists**: Que necesitan ingestar datos de mercado sucios, obtener métricas de calidad y tener un backend robusto para sus modelos.
+- **Fintechs en etapa MVP**: Que requieren persistencia histórica, control de anomalías y cálculos básicos desde el día 1.
+- **Arquitectos de Software**: Buscando un blueprint de referencia para sistemas de Data Quality y Finanzas.
 
 ## ✅ Scope del Producto
 
 ### Lo que SÍ hace
 
-- **Ingesta de Datos**: Acepta flujos de precios de mercado y los normaliza mediante un motor unificado.
-- **Warehousing Analítico**: Almacenamiento eficiente columnar (**DuckDB**) para consultas rápidas sobre series de tiempo directas sobre el sistema de archivos.
+- **Motor de Calidad (Ingesta)**: Endpoint `/ingest` tolerante a fallos. Valida la integridad, clasifica anomalías (ej. precios negativos, símbolos faltantes) y genera reportes de "Quality Score".
+- **Warehousing Analítico**: Almacenamiento eficiente columnar (**DuckDB**) para consultas rápidas sobre series de tiempo directas en el sistema de archivos.
 - **Motor Financiero**: endpoints API optimizados para cálculos vectorizados (Valor Presente, Tasa Interna de Retorno, Volatilidad/VaR).
-- **Auditabilidad**: Los datos crudos nunca se destruyen (Bronze Layer).
+- **Auditabilidad y Resiliencia**: Los datos crudos se conservan, y los corruptos van a una Dead Letter Queue (DLQ).
 
 ### Lo que NO hace
 

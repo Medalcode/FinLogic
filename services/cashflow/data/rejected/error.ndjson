@@ -1,0 +1,4 @@
+{"raw_data": {"symbol": "ETH", "price": -10, "ts": 1600000000}, "errors": ["negative_price"], "rejected_ts": 1781192420}
+{"raw_data": {"price": 100, "ts": 1600000000}, "errors": ["missing_symbol"], "rejected_ts": 1781192420}
+{"raw_data": {"symbol": "ETH", "price": -10, "ts": 1600000000}, "errors": ["negative_price"], "rejected_ts": 1781192471}
+{"raw_data": {"price": 100, "ts": 1600000000}, "errors": ["missing_symbol"], "rejected_ts": 1781192471}

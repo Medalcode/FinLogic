@@ -4,20 +4,16 @@ Este documento transforma el Roadmap Estratégico Q1 en un plan de ejecución t�
 
 ## 📅 Mes 1: Estabilización y Simplificación (Infraestructura)
 
-**Meta:** Eliminar Kafka, unificar servicios y asegurar el flujo de datos E2E.
 
 ### Epic 1.1: Decommission de Streaming Infra
 
 _Reducir la complejidad operativa y el consumo de recursos._
 
-- **[TASK-1.1.1] Eliminar Kafka y Zookeeper de Docker Compose**
-  - _Descripción:_ Remover servicios `kafka`, `zookeeper`, `ingest-producer` y `ingest-consumer` del `docker-compose.yml`. Eliminar código fuente relacionado en `platform/data-ingest`.
   - _Criterios de Aceptación:_ `docker-compose up` levanta solo `cashflow` y `etl-runner` (o unificado) sin errores. El consumo de RAM baja drásticamente.
   - _Esfuerzo:_ 1 día.
 
 ### Epic 1.2: Nueva API de Ingesta (Batch-over-HTTP)
 
-_Reemplazar el canal de Kafka con un endpoint HTTP robusto._
 
 - **[TASK-1.2.1] Crear Endpoint `POST /ingest` en Servicio Cashflow**
   - _Descripción:_ Endpoint que acepta una lista de `MarketQuote` (JSON), valida esquema básico (Pydantic) y escribe (append) a un archivo local rotativo `data/raw/incoming_YYYYMMDD_HH.ndjson`.

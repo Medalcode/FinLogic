@@ -54,20 +54,42 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("must end with '.duckdb'", resp.json().get('detail', ''))
 
-    def test_ingest_endpoint_success(self):
+    def test_ingest_quality_perfect_batch(self):
         headers = {'X-API-Key': 'test-key'}
         payload = [{"symbol": "BTC", "price": 50000, "ts": 1600000000}]
         resp = self.client.post("/ingest", json=payload, headers=headers)
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["status"], "ok")
-        self.assertEqual(resp.json()["ingested"], 1)
+        data = resp.json()
+        self.assertEqual(data["records_received"], 1)
+        self.assertEqual(data["valid"], 1)
+        self.assertEqual(data["rejected"], 0)
+        self.assertEqual(data["quality_score"], 100.0)
 
-    def test_ingest_endpoint_validation(self):
+    def test_ingest_quality_mixed_batch(self):
         headers = {'X-API-Key': 'test-key'}
-        # price must be > 0
-        payload = [{"symbol": "BTC", "price": -10, "ts": 1600000000}]
+        # Un registro válido, uno con precio negativo, uno sin symbol
+        payload = [
+            {"symbol": "BTC", "price": 50000, "ts": 1600000000},
+            {"symbol": "ETH", "price": -10, "ts": 1600000000},
+            {"price": 100, "ts": 1600000000}
+        ]
         resp = self.client.post("/ingest", json=payload, headers=headers)
-        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["records_received"], 3)
+        self.assertEqual(data["valid"], 1)
+        self.assertEqual(data["rejected"], 2)
+        self.assertAlmostEqual(data["quality_score"], 33.33)
+        self.assertIn("negative_price", data["anomalies"])
+        self.assertIn("missing_symbol", data["anomalies"])
+
+    def test_ingest_quality_empty_batch(self):
+        headers = {'X-API-Key': 'test-key'}
+        resp = self.client.post("/ingest", json=[], headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["records_received"], 0)
+        self.assertEqual(data["quality_score"], 0.0)
 
 if __name__ == '__main__':
     unittest.main()

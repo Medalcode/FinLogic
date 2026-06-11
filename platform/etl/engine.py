@@ -6,7 +6,7 @@ import glob
 import json
 import os
 import time
-from typing import Any
+from typing import Any, List, Dict
 
 # Configuración vía Variables de Entorno
 RAW_DIR = os.getenv('RAW_DIR', './data/raw')
@@ -35,8 +35,13 @@ def read_ndjson(path: str) -> List[Dict[str, Any]]:
             try:
                 rows.append(json.loads(line))
             except json.JSONDecodeError:
+                rej_record = {
+                    "raw_data": line,
+                    "errors": ["json_parse_error"],
+                    "rejected_ts": int(time.time())
+                }
                 with open(rejected_path, 'a') as rfh:
-                    rfh.write(line + '\n')
+                    rfh.write(json.dumps(rej_record) + '\n')
                 continue
     return rows
 

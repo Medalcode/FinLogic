@@ -13,8 +13,6 @@ Tareas realizadas (completadas)
 - Endpoints añadidos: `/prices` (lectura CSV y DuckDB), con filtros `symbol`, `limit`, `offset`, `from_ts`, `to_ts`.
 - Agregación OHLC (`agg=ohlc&interval=<s>`) en `/prices`.
 - Autenticación por API key (header `X-API-Key` o `Authorization: Bearer <key>`).
-- Ingest básico: `platform/data-ingest/producer.py` y `consumer.py` con Kafka (docker-compose).
-- Docker Compose para entorno local con Zookeeper, Kafka, servicios y ETL.
 - ETL runner (`platform/etl`) que convierte `data/raw/*.ndjson` a DuckDB (`data/warehouse/market.duckdb`).
 - `cashflow` capaz de leer DuckDB (mejor rendimiento) y CSV fallback.
 - Endpoint analítico `/analytics/summary` con resumen estadístico y VaR histórico.
